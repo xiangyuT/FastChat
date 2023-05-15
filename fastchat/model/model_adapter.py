@@ -51,6 +51,7 @@ def register_model_adapter(cls):
     model_adapters.append(cls())
 
 
+@cache
 def get_model_adapter(model_path: str) -> BaseAdapter:
     """Get a model adapter for a model_path."""
     for adapter in model_adapters:
