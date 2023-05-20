@@ -73,14 +73,30 @@ class ModelWorker:
         self.controller_addr = controller_addr
         self.worker_addr = worker_addr
         self.worker_id = worker_id
+        self.device = device
+        self.num_gpus = num_gpus
+        self.max_gpu_memory = max_gpu_memory
+        # TODO below should be sended to load_model()
+        self.load_8bit = load_8bit
+        self.cpu_offloading = False
+        
+        self.load_model(model_name, model_path)
+
+        if not no_register:
+            self.register_to_controller()
+            self.heart_beat_thread = threading.Thread(
+                target=heart_beat_worker, args=(self,)
+            )
+            self.heart_beat_thread.start()
+
+    def load_model(self, model_name, model_path):
         if model_path.endswith("/"):
             model_path = model_path[:-1]
         self.model_name = model_name or model_path.split("/")[-1]
-        self.device = device
 
         logger.info(f"Loading the model {self.model_name} on worker {worker_id} ...")
         self.model, self.tokenizer = load_model(
-            model_path, device, num_gpus, max_gpu_memory, load_8bit, cpu_offloading
+            model_path, self.device, self.num_gpus, self.max_gpu_memory, self.load_8bit, self.cpu_offloading
         )
         if self.tokenizer.pad_token == None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -98,13 +114,6 @@ class ModelWorker:
             self.generate_stream_func = chatglm_generate_stream
         else:
             self.generate_stream_func = generate_stream
-
-        if not no_register:
-            self.register_to_controller()
-            self.heart_beat_thread = threading.Thread(
-                target=heart_beat_worker, args=(self,)
-            )
-            self.heart_beat_thread.start()
 
     def register_to_controller(self):
         logger.info("Register to controller")
@@ -325,6 +334,24 @@ def create_background_tasks():
     background_tasks = BackgroundTasks()
     background_tasks.add_task(release_model_semaphore)
     return background_tasks
+
+
+@app.post("/worker_swap_in")
+async def api_swap_in(request: Request):
+    assert worker.model is None
+    params = await request.json()
+    worker.load_model(model_name=params["model_name"],
+                      model_path=params["model_path"])
+
+
+@app.post("/worker_swap_out")
+async def api_swap_out(request: Request):
+    params = await request.json()
+    assert params["model_name"] == worker.model_name
+    worker.model_path = None
+    worker.model_name = None
+    worker.model = None
+    worker.tokenizer = None
 
 
 @app.post("/worker_generate_stream")
