@@ -25,9 +25,9 @@ def get_worker_addr(worker_address, controller_addr, model_name):
         return worker_addr
 
 
-def test_model_call(worker_addr, model_name, args):
+def test_model_call(worker_addr, model_name, message):
     conv = get_conversation_template(model_name)
-    conv.append_message(conv.roles[0], args.message)
+    conv.append_message(conv.roles[0], message)
     conv.append_message(conv.roles[1], None)
     prompt = conv.get_prompt()
 
@@ -35,8 +35,8 @@ def test_model_call(worker_addr, model_name, args):
     gen_params = {
         "model": model_name,
         "prompt": prompt,
-        "temperature": args.temperature,
-        "max_new_tokens": args.max_new_tokens,
+        "temperature": 0,
+        "max_new_tokens": 32,
         "stop": conv.stop_str,
         "stop_token_ids": conv.stop_token_ids,
         "echo": False,
@@ -48,7 +48,7 @@ def test_model_call(worker_addr, model_name, args):
         stream=True,
     )
 
-    print(f"{conv.roles[0]}: {args.message}")
+    print(f"{conv.roles[0]}: {message}")
     print(f"{conv.roles[1]}: ", end="")
     prev = 0
     for chunk in response.iter_lines(decode_unicode=False, delimiter=b"\0"):
@@ -59,13 +59,17 @@ def test_model_call(worker_addr, model_name, args):
             prev = len(output)
     print("")
 
+    return output
+
 
 def test_swap(args):
+
     worker_addr = get_worker_addr(args.worker_address, args.controller_address, args.model_name)
     if worker_addr == "":
         print(f"No available workers for {model_name}")
         return
-    test_model_call(worker_addr, args.model_name, args)
+    message = "Tell me a story with more than 1000 words."
+    test_model_call(worker_addr, args.model_name, message)
 
     # TODO test controller information update: re-get worker_addr
     # swap out
@@ -92,7 +96,9 @@ def test_swap(args):
         json=gen_params,
         stream=True,
     )
-    test_model_call(worker_addr, gen_params["model_name"], args)
+    message = "Tell me a story with more than 1000 words."
+    output = test_model_call(worker_addr, gen_params["model_name"], message)
+    assert message == "Tell me a story with more than 1000 words."
 
 
 if __name__ == "__main__":
@@ -102,8 +108,6 @@ if __name__ == "__main__":
     )
     parser.add_argument("--worker-address", type=str)
     parser.add_argument("--model-name", type=str, required=True)
-    parser.add_argument("--temperature", type=float, default=0.0)
-    parser.add_argument("--max-new-tokens", type=int, default=32)
     parser.add_argument(
         "--message", type=str, default="Tell me a story with more than 1000 words."
     )
