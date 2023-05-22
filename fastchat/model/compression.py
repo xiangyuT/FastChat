@@ -10,7 +10,7 @@ from torch import Tensor
 import torch.nn as nn
 from torch.nn import functional as F
 from tqdm import tqdm
-from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoConfig
 
 
 @dataclasses.dataclass
@@ -101,13 +101,18 @@ def load_compress_model(model_path, device, torch_dtype):
     # partially load model
     tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
     base_pattern = os.path.join(model_path, "pytorch_model-*.bin")
+    if "t5" in model_path:
+        base_pattern = os.path.join(model_path, "pytorch_model.bin")
     files = glob.glob(base_pattern)
 
     with init_empty_weights():
         config = AutoConfig.from_pretrained(
             model_path, low_cpu_mem_usage=True, torch_dtype=torch_dtype
         )
-        model = AutoModelForCausalLM.from_config(config)
+        if "t5" in model_path:
+            model = AutoModelForSeq2SeqLM.from_config(config)
+        else:
+            model = AutoModelForCausalLM.from_config(config)
         linear_weights = get_compressed_list(model)
 
     compressed_state_dict = {}
@@ -126,7 +131,6 @@ def load_compress_model(model_path, device, torch_dtype):
             tensor = None
             gc.collect()
             torch.cuda.empty_cache()
-
     for name in model.state_dict():
         if name not in linear_weights:
             set_module_tensor_to_device(
