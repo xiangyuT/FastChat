@@ -769,6 +769,12 @@ async def create_chat_completion(request: APIChatCompletionRequest):
 
 ### END GENERAL API - NOT OPENAI COMPATIBLE ###
 
+@app.post("/api/v1/attest/quote_generation")
+async def bigdl_quote_generation(request: BigDLQuoteGenerationRequest):
+    user_report_data = request.userdata
+    quote_b = quote_generator.generate_tdx_quote(user_report_data)
+    quote = base64.b64encode(quote_b.encode()).decode('utf-8')
+    return BigDLQuoteGenerationResponse(quote=quote)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

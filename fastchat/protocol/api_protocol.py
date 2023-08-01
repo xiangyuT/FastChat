@@ -166,3 +166,9 @@ class CompletionStreamResponse(BaseModel):
     created: int = Field(default_factory=lambda: int(time.time()))
     model: str
     choices: List[CompletionResponseStreamChoice]
+
+class BigDLQuoteGenerationRequest(BaseModel):
+    userdata: str
+
+class BigDLQuoteGenerationResponse(BaseModel):
+    quote: str
